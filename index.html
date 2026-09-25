@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Zombie Apocalypse</title>
+        <style>
+            /* CSS HERE */
+            #canvas {
+                border: 2px solid black;
+            }
+
+            #healthDisplay {
+                position: absolute;
+                left: 60%;
+                top: 50%;
+                transform: translate(-40%, -50%);
+            }
+
+            #ammoDisplay {
+                position: absolute;
+                left: 60%;
+                top: 70%;
+                transform: translate(-40%, -30%);
+            }
+
+            #coinDisplay {
+                position: absolute;
+                left: 60%;
+                top: 60%;
+                transform: translate(-40%, -40%);
+            }
+
+            #endGameContainer, #winContainer {
+                display: none;
+                position: absolute;
+                left: 25%;
+                top: 50%;
+                transform: translate(-75%, -50%);
+            }
+
+            #restartBttn, #winRestartBttn, #endless {
+                border: 2px solid black;
+                border-radius: 10px;
+                background-color: black;
+                color: white;
+            }
+
+            #restartBttn:hover, #winRestartBttn:hover, #endless:hover {
+                background-color: white;
+                color: black;
+            }
+
+             #shopContainer {
+                display: none;
+                position: absolute;
+                left: 25%;
+                top: 50%;
+                transform: translate(-75%, -50%);
+            }
+
+            .upgradeBttn {
+                border: 2px solid black;
+                border-radius: 10px;
+                background-color: red;
+                color: white;
+            }
+
+            .upgradeBttn:hover {
+                background-color: cyan;
+                color: black;
+            }
+
+            .upgradeBttn:disabled {
+                background-color: gray;
+                color: black;
+                opacity: 0.4;
+            }
+
+            #cancelBttn {
+                border: 2px solid black;
+                border-radius: 10px;
+                background-color: red;
+                color: white;
+            }
+
+            #cancelBttn:hover {
+                background-color: darkred;
+                color: white;
+            }
+
+            #roundDisplay {
+                position: absolute;
+                left: 25%;
+                top: 10%;
+                transform: translate(-75%, -90%);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- HTML HERE -->
+        <h1 id="healthDisplay">Health: N/A</h1>
+        <h1 id="ammoDisplay">Ammo/MaxAmmo</h1>
+        <h1 id="coinDisplay">🪙 Coins: N/A</h1>
+        <div id="endGameContainer">
+        <h3 id="deathDisplay">You Died!</h3>
+        <button id="restartBttn">Restart</button>
+        </div>
+
+         <div id="winContainer">
+        <h3 id="winDisplay">You Won!</h3>
+        <button id="winRestartBttn">Restart</button>
+        <button id="endless">Endless Mode</button>
+        </div>
+
+        <div id="shopContainer">
+        <h2 id="shopDisplay">SHOP</h2>
+        <div id="shopContainerList"></div>
+        <button id="cancelBttn">Leave</button>
+        </div>
+        
+        <h2 id="mouseDisplay">Mouse: N/A</h2>
+        <h2 id="roundDisplay">Round: N/A</h2>
+        <canvas width="600" height="600" id="canvas"></canvas>
+        <script>
+
+            // Game vars
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext('2d');
+            const hd = document.getElementById("healthDisplay");
+            const ad = document.getElementById("ammoDisplay");
+            const md = document.getElementById("mouseDisplay");
+            const egc = document.getElementById("endGameContainer");
+            const wc = document.getElementById("winContainer");
+            const dd = document.getElementById("deathDisplay");
+            const cd = document.getElementById("coinDisplay");
+            const rd = document.getElementById("roundDisplay");
+            const sc = document.getElementById("shopContainer"); 
+            const scl = document.getElementById("shopContainerList"); 
+            const cancelBttn = document.getElementById("cancelBttn");
+            const restartBttn = document.getElementById("restartBttn");
+            const winRestartBttn = document.getElementById("winRestartBttn");
+            const endlessBttn = document.getElementById("endless");
+            const keys = {} // turns out I need to make this exist myself
+            let gameOver = false;
+            let endless = false;
+
+            //Player vars
+            let playerX = 300; //center
+            let playerY = 300; //center
+            let playerWidth = 50;
+            let playerHeight = 50;
+           
+            let damageCooldown = false;
+            let maxAmmo = 25;
+            let ammo = 25;
+            let reloading = false // DONT FORGET THIS
+            let round = 0; //automatically increases to one
+
+            //PLAYER STATS
+            let kills = 0;
+            let maxHealth = 3;
+            let health = maxHealth;
+            let speed = 5;
+            let coins = 0;
+
+            // Mouse vars
+            let mouseX = 0;
+            let mouseY = 0;
+            let canvasMouseX = 0;
+            let canvasMouseY = 0;
+            let dx = 0;
+            let dy = 0;
+            let angle = 0;
+
+            //Zombie vars
+            let zombies = []; // might be used, might not
+            let czir = 0; // current zombies in round
+            let mzir = 1; // max zombies in round
+            let bossSpawned = false;
+            let bossStage = 1;
+            let zombieTypes = {
+                speedy: {
+                    health: 1,
+                    speed: 4,
+                    damage: 1,
+                    color: "cyan",
+                    chance: 0.2,
+                    size: 40,
+                    maxCoinDrop: 5,
+                },
+                
+                normal: {
+                    health: 2,
+                    speed: 2,
+                    damage: 1,
+                    color: "green",
+                    chance: 0.7,
+                    size: 45,
+                    maxCoinDrop: 3,
+                },
+
+                strong: {
+                    health: 5,
+                    speed: 0.75,
+                    damage: 3,
+                    color: "purple",
+                    chance: 0.1,
+                    size: 50,
+                    maxCoinDrop: 10,
+                },
+
+                boss: {
+                    name: "boss",
+                    health: 50,
+                    speed: 2.5,
+                    damage: 5,
+                    color: "maroon",
+                    chance: 0,
+                    size: 100,
+                    maxCoinDrop: 100,
+                },
+
+                minion: {
+                    health: 35,
+                    speed: 3,
+                    damage: 3,
+                    color: "red",
+                    chance: 0,
+                    size: 80,
+                    maxCoinDrop: 75
+                }
+            }
+            
+
+            //Bullet vars
+            let bullets = [];
+
+            //Shop vars
+            const upgrades = {
+                health: {
+                   basePrice: 10,
+                   price: 10,
+                   inflation: 1.1, //ik ik it sucks that everwhere has it
+                   level: 0,
+                   maxLevel: 37,
+                },
+
+                ammo: {
+                    basePrice: 5,
+                    price: 5,
+                    inflation: 1.25,
+                    level: 0,
+                    maxLevel: 15,
+                },
+
+                speed: {
+                    basePrice: 15,
+                    price: 15,
+                    inflation: 1.25,
+                    level: 0,
+                    maxLevel: 5,
+                }
+            };
+
+            function gameLoop() {
+
+               
+            if (!gameOver) {
+                if (keys["w"] && playerY > 0) {
+                    playerY -= speed; // down = up, up = down, js is weird
+                }
+
+                if (keys["s"] && playerY < canvas.height - 50) {
+                    playerY += speed;
+                }
+
+                if (keys["a"] && playerX > 0) {
+                    playerX -= speed; // at least horizontal is normal, I think
+                }
+
+                if (keys["d"] && playerX < canvas.width - 50) {
+                    playerX += speed;
+                }
+            }
+
+            // ctx.clear(); does not exist, clear the entire canvas manually
+               ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+             
+                moveZombies(); // more of a move function than a render function
+                updateDisplays();
+                checkBullets(); // should draw under the player
+                drawBullets();
+                drawCanvas(); // always put render functions last, always have canvas as the first render    
+                requestAnimationFrame(gameLoop);
+            }
+
+            function drawCanvas() {
+               ctx.fillStyle = "blue";
+               ctx.fillRect(playerX, playerY, playerWidth, playerHeight); // X pos,Y pos, width, height (or height,width idk)
+
+               for (let i = 0; i < zombies.length; i++) {
+                   const zombie = zombies[i];
+                   ctx.fillStyle = zombie.color;
+                   ctx.fillRect(zombie.x, zombie.y, zombie.width, zombie.height);
+               }
+
+              
+               
+            }
+
+            function checkBullets() {
+                 for (let i = 0; i < bullets.length; i++) {
+                   const bullet = bullets[i];
+
+                    for (let j = 0; j < zombies.length; j++) {
+                    const zombie = zombies[j];
+
+                    if (bullet.x < zombie.x + zombie.width && 
+                    bullet.x + bullet.range > zombie.x &&
+                    bullet.y < zombie.y + zombie.height &&
+                    bullet.range + bullet.y > zombie.y) {
+                    zombie.health -= 1;
+                    if (zombie.health <= 0) {
+                        if (zombie.name === "boss" && bossStage === 1) {
+                            zombie.health = 25;
+                            zombie.width = 75;
+                            zombie.height = 75;
+                            zombie.color = "pink";
+                            zombie.speed = 4;
+                            bossStage = 2;
+                        } else {
+                            if (zombie.name === "boss") {
+                                wc.style.display = "block";
+                                 zombies.splice(j, 1); //j = index, 1 = amount
+                                 bullets.splice(i, 1);
+                                 czir -= 1;
+                                 kills += 1;
+                                 coins += Math.floor(Math.random() * Number(zombie.maxCoinDrop)) + 1;
+                                 return;
+                            }
+                            
+                        zombies.splice(j, 1); //j = index, 1 = amount
+                        czir -= 1;
+                        kills += 1;
+                        coins += Math.floor(Math.random() * Number(zombie.maxCoinDrop)) + 1;
+
+                        if (czir === 0) {
+                            mzir += 2;
+                            createButtons();
+                            sc.style.display = "block";
+                        }
+                    }
+                }
+                        bullets.splice(i, 1);
+                        break;
+                }
+             }
+         }             
+     }
+
+            
+
+            function drawBullets() {
+                for (let i = 0; i < bullets.length; i++) {
+                    const bullet = bullets[i];
+                    
+                   bullet.x += Math.cos(bullet.angle) * bullet.speed; // we do want to do += not just =
+                   bullet.y += Math.sin(bullet.angle) * bullet.speed;
+                   ctx.fillStyle = "red";
+                   ctx.beginPath();
+                   ctx.arc(bullet.x, bullet.y, bullet.range, 0, Math.PI * 2);
+                   ctx.fill();
+                }
+                
+            }
+
+            function startRound(z = 3) {
+                 round++;
+                if (round === 35) {
+                    z = 3;
+                    mzir = 3;
+                }
+
+                if (endless) health = maxHealth;
+                
+                 let index = z;
+                 let delay;
+                 czir = mzir;
+            
+                function spawnNext() {
+                    delay = Math.floor(Math.random() * 401) + 350;
+                    
+                    setTimeout(() => {
+                    spawnZombie();
+                    index--;
+                    if (index <= 0) return;   
+                    spawnNext();
+    
+                    }, delay);
+                }
+
+           
+                setTimeout(() => {
+                    spawnNext();
+                      }, 1000);
+                 }
+
+            function spawnZombie() {
+                 let randX = 0;
+                 let randY = Math.floor(Math.random() * 600); //using let for both for consistancy
+                
+                if (Math.random() > 0.5) {
+                    randX = 0;
+                } else {
+                    randX = 600;
+                }
+
+                let zombie;
+            if (round < 35 || round > 35) {
+                zombie = getRandomZombie();
+                } else {
+                if (!bossSpawned) {
+                zombie = zombieTypes.boss;
+                bossSpawned = true;
+                    } else {
+                zombie = zombieTypes.minion;
+                    }
+                }
+
+                zombies.push({
+                    name: zombie.name || "zombie",
+                    x: randX,
+                    y: randY,
+                    width: zombie.size,
+                    height: zombie.size,
+                    health: zombie.health,
+                    speed: zombie.speed,
+                    damage: zombie.damage,
+                    color: zombie.color,
+                    maxCoinDrop: zombie.maxCoinDrop,
+                });
+                
+            }
+
+            function moveZombies() {
+            if (gameOver) return;
+            for (let i = 0; i < zombies.length; i++) {
+                let zombie = zombies[i];
+                if (playerX > zombie.x) {
+                    zombie.x += zombie.speed;
+                }
+
+                if (playerX < zombie.x) {
+                    zombie.x -= zombie.speed;
+                }
+
+                if (playerY > zombie.y) {
+                    zombie.y += zombie.speed;
+                }
+
+                 if (playerY < zombie.y) {
+                    zombie.y -= zombie.speed;
+                }
+
+                /* ====================
+                * COLLISION CODE
+                * ===================== */
+                if (playerX < zombie.x + zombie.width && 
+                    playerX + playerWidth > zombie.x &&
+                    playerY < zombie.y + zombie.height &&
+                    playerHeight + playerY > zombie.y) { // I always get confused on this part
+
+                if (!damageCooldown) {
+                    health -= zombie.damage;
+                    damageCooldown = true;
+
+                    if (health <= 0) {
+                        egc.style.display = "block";
+                        gameOver = true;
+                    }
+
+                    setTimeout(() => {
+                    damageCooldown = false;
+                    }, 1000);
+                }   
+                    
+            }
+        }
+    }
+
+            function getRandomZombie() {
+                let chance = Math.random();
+                for (const type in zombieTypes) {
+                    const zombieType = zombieTypes[type];
+                    
+
+                    if (chance < zombieType.chance) {
+                        return zombieType;
+                    }
+
+                    chance -=  zombieType.chance;
+                }
+            }
+
+            function spawnBullet() {
+                if (reloading) return;
+                
+                ammo -= 1;
+                if (ammo === 0) {
+                    reloading = true;
+
+                    setTimeout(() => {
+                        reloading = false;
+                        ammo = maxAmmo
+                    }, 2500);
+                }
+                
+                bullets.push({
+                    x: playerX + playerWidth / 2,
+                    y: playerY + playerHeight / 2,
+                    range: 5,
+                    angle: angle,
+                    damage: 1,
+                    speed: 5,         
+                });
+            }
+
+            function upgradeStat(type) {
+                const upgrade = upgrades[type];
+                if (upgrade.level >= upgrade.maxLevel) {
+                    alert("Max Level Reached!"); // this is used as a blocker in case the button wasn't disabled properly
+                    return;
+                }
+                if (type === "health") {
+                    if (coins >= upgrade.price) {
+                        coins -= upgrade.price
+                        upgrade.level++;
+                        upgrade.price = Math.floor(upgrade.price *= upgrade.inflation)
+                        maxHealth += 1;
+                        health = maxHealth;
+                        alert("Upgraded!");
+                    } else {
+                        alert("Not enough coins!");
+                    }
+                }
+
+                if (type === "ammo") {
+                    if (coins >= upgrade.price) {
+                        coins -= upgrade.price
+                        upgrade.level++;
+                        upgrade.price = Math.floor(upgrade.price *= upgrade.inflation);
+                        maxAmmo += 5;
+                        ammo = maxAmmo;
+                        alert("Upgraded!");
+                    } else {
+                        alert("Not enough coins!");
+                    }
+                }
+
+                if (type === "speed") {
+                     if (coins >= upgrade.price) {
+                        coins -= upgrade.price
+                        upgrade.level++;
+                        upgrade.price = Math.floor(upgrade.price *= upgrade.inflation);
+                        speed += 1;
+                        alert("Upgraded!");
+                    } else {
+                        alert("Not enough coins!");
+                    }
+                }
+
+                scl.innerHTML = "";
+                createButtons();
+            }
+
+            function createButtons() {
+                for (const type in upgrades) {
+                    const upgrade = upgrades[type];
+                    const button = document.createElement("button");
+                    button.innerText = `${type} - ${upgrade.price} Coins 🪙`
+                    button.className = "upgradeBttn";
+                    if (upgrade.level >= upgrade.maxLevel) {
+                        upgrade.level = upgrade.maxLevel // just in case
+                        button.disabled = true; // didnt work before but we can try again
+                        button.innerText = "MAXED"
+                    } else {
+                        button.disabled = false;
+                    }
+                    
+                    scl.appendChild(button);
+
+                    button.addEventListener("click", () => {
+                        upgradeStat(type);
+                    });
+                }
+            }
+
+            function updateDisplays() {
+                hd.innerText = `Health: ${health}/${maxHealth}`;
+                ad.innerText = `${ammo}/${maxAmmo}`;
+                md.innerText = `Mouse: ${canvasMouseX}, ${canvasMouseY}`;
+                cd.innerText = `🪙 Coins: ${coins}`
+                rd.innerText = `Round: ${round}`
+            }
+
+            cancelBttn.addEventListener("click", (e) => {
+                scl.innerHTML = "";
+                sc.style.display = "none";
+                startRound(mzir);
+            });
+
+            restartBttn.addEventListener("click", (e) => {
+                egc.style.display = "none";
+                round = 0;
+                kills = 0;
+                mzir = 1;
+                czir = 0;
+                maxHealth = 3;
+                health = maxHealth;
+                speed = 5,
+                coins = 0;
+                maxAmmo = 25;
+                ammo = maxAmmo;
+                zombies = [];
+                bullets = [];
+                reloading = false;
+                playerX = 300;
+                playerY = 300;
+                bossSpawned = false;
+                for (const type in upgrades) {
+                    const upgrade = upgrades[type];
+                    upgrade.level = 0;
+                    upgrade.price = upgrade.basePrice;
+                }
+                startRound(mzir);
+                gameOver = false;
+            });
+
+            winRestartBttn.addEventListener("click", (e) => {
+                egc.style.display = "none";
+                wc.style.display = "none";
+                round = 0;
+                kills = 0;
+                mzir = 1;
+                czir = 0;
+                maxHealth = 3;
+                health = maxHealth;
+                speed = 5,
+                coins = 0;
+                maxAmmo = 25;
+                ammo = maxAmmo;
+                zombies = [];
+                bullets = [];
+                reloading = false;
+                playerX = 300;
+                playerY = 300;
+                bossSpawned = false;
+                for (const type in upgrades) {
+                    const upgrade = upgrades[type];
+                    upgrade.level = 0;
+                    upgrade.price = upgrade.basePrice;
+                }
+                startRound(mzir);
+                gameOver = false;
+            });
+
+            endlessBttn.addEventListener("click", (e) => {
+                wc.style.display = "block";
+                endless = true;
+                mzir = 70;
+                czir = mzir;
+                wc.style.display = "none";
+                startRound(mzir);
+            });
+
+            window.addEventListener("keydown", (e) => {
+                if (e.key.toLowerCase() === "w") {
+                    keys["w"] = true; // not sure if this works but we can try it
+                }
+
+                 if (e.key.toLowerCase() === "s") {
+                    keys["s"] = true; 
+                }
+
+                 if (e.key.toLowerCase() === "a") {
+                    keys["a"] = true; 
+                }
+
+                 if (e.key.toLowerCase() === "d") {
+                    keys["d"] = true;
+                }
+
+                if (e.key === " " && !gameOver) {
+                    e.preventDefault();
+                    spawnBullet();
+                }
+
+                if (e.key.toLowerCase() === "p" && !gameOver) {
+                    e.preventDefault();
+                    maxHealth = 40;
+                    health = maxHealth;
+                    maxAmmo = 100;
+                    ammo = maxAmmo;
+                    speed = 10;
+                    round = 33;
+                }
+                
+            });
+
+             window.addEventListener("keyup", (e) => {
+                if (e.key.toLowerCase() === "w") {
+                    keys["w"] = false; // not sure if this works but we can try it
+                }
+
+                 if (e.key.toLowerCase() === "s") {
+                    keys["s"] = false; 
+                }
+
+                 if (e.key.toLowerCase() === "a") {
+                    keys["a"] = false; 
+                }
+
+                 if (e.key.toLowerCase() === "d") {
+                    keys["d"] = false;
+                }
+                
+            });
+
+            window.addEventListener("mousemove", (e) => {
+                const rect = canvas.getBoundingClientRect();
+
+                mouseX = e.x;
+                mouseY = e.y;
+
+                canvasMouseX = Math.floor(mouseX - rect.left);
+                canvasMouseY = Math.floor(mouseY - rect.top);
+
+                dx = canvasMouseX - playerX;
+                dy = canvasMouseY - playerY;
+
+                angle = Math.atan2(dy, dx);
+            });
+
+            requestAnimationFrame(gameLoop) // do not call this directly, also semi-colons are optional, so use them :|
+            startRound(mzir);
+        </script>
+    </body>
+</html>
